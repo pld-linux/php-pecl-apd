@@ -7,9 +7,9 @@ Version:	0.4p2
 Release:	1
 License:	PHP 2.02
 Group:		Development/Languages/PHP
-Source0:	http://pear.php.net/get/%{_modname}-%{version}.tgz
+Source0:	http://pecl.php.net/get/%{_modname}-%{version}.tgz
 # Source0-md5:	7b13b405033e693e67ac8b9ff5ae93c2
-URL:		http://pear.php.net/package/apd/
+URL:		http://pecl.php.net/package/apd/
 BuildRequires:	libtool
 BuildRequires:	php-devel
 Requires:	php-common
