@@ -24,14 +24,14 @@ APD is a full-featured profiler/debugger that is loaded as a
 zend_extension. It aims to be an analog of C's gprof or Perl's
 Devel::DProf.
 
-This extension has in PEAR status: %{_status}.
+In PECL status of this package is: %{_status}.
 
 %description -l pl
 APD to w pe³ni funkcjonalny profiler/debugger ³adowany jako
 rozszerzenie Zend. Ma byæ odpowiednikiem gprof z C lub perlowego
 Devel::DProf.
 
-To rozszerzenie ma w PEAR status: %{_status}.
+To rozszerzenie ma w PECL status: %{_status}.
 
 %prep
 %setup -q -c
