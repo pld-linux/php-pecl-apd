@@ -1,7 +1,7 @@
 %define		_modname	apd
 %define		_status		stable
-Summary:	%{_modname} -
-Summary(pl):	%{_modname} -
+Summary:	%{_modname} - full-featured engine-level profiler/debugger
+Summary(pl):	%{_modname} - w pe³ni funkcjonalny profiler/debugger dla PHP
 Name:		php-pecl-%{_modname}
 Version:	0.4p2
 Release:	1
@@ -9,7 +9,7 @@ License:	PHP 2.02
 Group:		Development/Languages/PHP
 Source0:	http://pear.php.net/get/%{_modname}-%{version}.tgz
 # Source0-md5:	7b13b405033e693e67ac8b9ff5ae93c2
-URL:		http://pear.php.net/package/%{_pearname}/
+URL:		http://pear.php.net/package/apd/
 BuildRequires:	libtool
 BuildRequires:	php-devel
 Requires:	php-common
@@ -20,10 +20,16 @@ BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 %define		extensionsdir	%{_libdir}/php
 
 %description
+APD is a full-featured profiler/debugger that is loaded as a
+zend_extension. It aims to be an analog of C's gprof or Perl's
+Devel::DProf.
 
 This extension has in PEAR status: %{_status}.
 
 %description -l pl
+APD to w pe³ni funkcjonalny profiler/debugger ³adowany jako
+rozszerzenie Zend. Ma byæ odpowiednikiem gprof z C lub perlowego
+Devel::DProf.
 
 To rozszerzenie ma w PEAR status: %{_status}.
 
