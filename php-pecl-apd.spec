@@ -16,7 +16,7 @@ Patch0:		%{name}-build_fix.patch
 URL:		http://pecl.php.net/package/apd/
 BuildRequires:	php-devel >= 3:5.0.0
 BuildRequires:	rpmbuild(macros) >= 1.238
-%requires_zend_extension
+%{?requires_zend_extension}
 Requires:	%{_sysconfdir}/conf.d
 Obsoletes:	php-pear-%{_modname}
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
