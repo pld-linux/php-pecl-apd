@@ -6,7 +6,7 @@ Summary:	%{_modname} - full-featured engine-level profiler/debugger
 Summary(pl):	%{_modname} - w pe³ni funkcjonalny profiler/debugger dla PHP
 Name:		php-pecl-%{_modname}
 Version:	1.0.1
-Release:	3
+Release:	4
 License:	PHP 2.02
 Group:		Development/Languages/PHP
 Source0:	http://pecl.php.net/get/%{_modname}-%{version}.tgz
