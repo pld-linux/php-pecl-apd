@@ -6,7 +6,7 @@ Summary:	%{_modname} - full-featured engine-level profiler/debugger
 Summary(pl):	%{_modname} - w pe³ni funkcjonalny profiler/debugger dla PHP
 Name:		php-pecl-%{_modname}
 Version:	1.0.1
-Release:	5
+Release:	6
 License:	PHP 2.02
 Group:		Development/Languages/PHP
 Source0:	http://pecl.php.net/get/%{_modname}-%{version}.tgz
@@ -51,7 +51,7 @@ install -d $RPM_BUILD_ROOT{%{_sysconfdir}/conf.d,%{extensionsdir}}
 install %{_modname}-%{version}/modules/%{_modname}.so $RPM_BUILD_ROOT%{extensionsdir}
 cat <<'EOF' > $RPM_BUILD_ROOT%{_sysconfdir}/conf.d/%{_modname}.ini
 ; Enable %{_modname} extension module
-zend_extension=%{_modname}.so
+zend_extension%{?zend_zts:_ts}=%{_modname}.so
 EOF
 
 %clean
