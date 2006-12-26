@@ -4,12 +4,12 @@ Summary:	%{_modname} - full-featured engine-level profiler/debugger
 Summary(pl):	%{_modname} - w pe³ni funkcjonalny profiler/debugger dla PHP
 Name:		php-pecl-%{_modname}
 Version:	1.0.1
-Release:	6
+Release:	7
 License:	PHP 2.02
 Group:		Development/Languages/PHP
 Source0:	http://pecl.php.net/get/%{_modname}-%{version}.tgz
 # Source0-md5:	470ea75cde09f7504c83441911c86f29
-Patch0:		%{name}-build_fix.patch
+Patch0:		%{name}-cvs.patch
 URL:		http://pecl.php.net/package/apd/
 BuildRequires:	php-devel >= 3:5.0.0
 BuildRequires:	rpmbuild(macros) >= 1.344
@@ -34,6 +34,7 @@ To rozszerzenie ma w PECL status: %{_status}.
 
 %prep
 %setup -q -c
+cd %{_modname}-%{version}
 %patch0 -p1
 
 %build
