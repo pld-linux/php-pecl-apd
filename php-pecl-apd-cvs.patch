@@ -1,0 +1,989 @@
+Index: apd/php_apd.c
+===================================================================
+RCS file: /repository/pecl/apd/php_apd.c,v
+retrieving revision 1.59
+retrieving revision 1.67
+diff -u -r1.59 -r1.67
+--- apd/php_apd.c	28 Sep 2004 03:44:54 -0000	1.59
++++ apd/php_apd.c	11 Dec 2006 06:59:43 -0000	1.67
+@@ -62,7 +62,7 @@
+ #endif
+ ZEND_DLEXPORT void (*old_execute)(zend_op_array *op_array TSRMLS_DC);
+ 
+-ZEND_DLEXPORT void onStatement(zend_op_array *op_array TSRMLS_DC);
++ZEND_DLEXPORT void onStatement(zend_op_array *op_array);
+ ZEND_DECLARE_MODULE_GLOBALS(apd);
+ 
+ /* This comes from php install tree. */
+@@ -360,20 +360,20 @@
+ 		return;
+ 	}
+ 	
+-	if (zend_hash_find(APD_GLOBALS(file_summary), (char *) filename, strlen(filename) + 1, (void *) &filenum) == FAILURE) {
++	if (zend_hash_find(&APD_GLOBALS(file_summary), (char *) filename, strlen(filename) + 1, (void *) &filenum) == FAILURE) {
+ 		filenum = (int *) emalloc(sizeof(int));
+ 		*filenum = ++APD_GLOBALS(file_index);
+ 		APD_GLOBALS(output).file_reference(*filenum, filename);
+-		zend_hash_add(APD_GLOBALS(file_summary), (char *) filename, strlen(filename) + 1, filenum, sizeof(int), NULL);
++		zend_hash_add(&APD_GLOBALS(file_summary), (char *) filename, strlen(filename) + 1, filenum, sizeof(int), NULL);
+ 	}
+ 	APD_GLOBALS(current_file_index) = *filenum;
+ 
+-	if (zend_hash_find(APD_GLOBALS(function_summary), (char *) fname, strlen(fname)+1, (void *) &function_index) == SUCCESS) {
++	if (zend_hash_find(&APD_GLOBALS(function_summary), (char *) fname, strlen(fname)+1, (void *) &function_index) == SUCCESS) {
+ 		APD_GLOBALS(output).enter_function(*function_index, *filenum, linenum);
+ 	} else {
+ 		function_index = (int *) emalloc(sizeof(int));
+ 		*function_index = ++APD_GLOBALS(function_index);
+-		zend_hash_add(APD_GLOBALS(function_summary), (char *) fname, strlen(fname)+1, function_index, sizeof(int), NULL);
++		zend_hash_add(&APD_GLOBALS(function_summary), (char *) fname, strlen(fname)+1, function_index, sizeof(int), NULL);
+ 		APD_GLOBALS(output).declare_function(*function_index, fname, type);
+ 		APD_GLOBALS(output).enter_function(*function_index, *filenum, linenum);
+ 	}
+@@ -393,16 +393,22 @@
+ 		return;
+ 	}
+ 
++#if PHP_MAJOR_VERSION == 5
++#if PHP_MINOR_VERSION < 2
+ #if MEMORY_LIMIT
+ 	allocated = AG(memory_limit);
+ #endif
++#else
++	allocated = zend_memory_usage(0 TSRMLS_CC) - APD_GLOBALS(entry_memory_usage);
++#endif
++#endif
+ 	log_time(TSRMLS_C);	
+-	if (zend_hash_find(APD_GLOBALS(function_summary), fname, strlen(fname) + 1, (void *) &function_index) == SUCCESS) {
++	if (zend_hash_find(&APD_GLOBALS(function_summary), fname, strlen(fname) + 1, (void *) &function_index) == SUCCESS) {
+ 		APD_GLOBALS(output).exit_function(*function_index, allocated);
+ 	} else {
+ 		function_index = (int *) emalloc(sizeof(int));
+ 		*function_index = ++APD_GLOBALS(function_index);
+-		zend_hash_add(APD_GLOBALS(function_summary), fname, strlen(fname)+1, function_index, sizeof(int), NULL);
++		zend_hash_add(&APD_GLOBALS(function_summary), fname, strlen(fname)+1, function_index, sizeof(int), NULL);
+ 		APD_GLOBALS(output).exit_function(*function_index, allocated);
+ 	}
+ }
+@@ -421,7 +427,15 @@
+ 		stime = diff_times(wall_ru.ru_stime, APD_GLOBALS(last_ru).ru_stime);
+ 		rtime = diff_times(clock, APD_GLOBALS(last_clock));
+ 		if(utime || stime || rtime) {
+-			APD_GLOBALS(output).elapsed_time(APD_GLOBALS(current_file_index), zend_get_executed_lineno(TSRMLS_C), utime, stime, rtime);
++            int lineno = 0;
++            if(EG(active_op_array)) {
++				if(EG(active_op_array)->start_op) {
++					lineno = EG(active_op_array)->start_op->lineno;
++				} else if(EG(active_op_array)->opcodes) {
++					lineno = EG(active_op_array)->opcodes->lineno;
++				}
++			} 
++			APD_GLOBALS(output).elapsed_time(APD_GLOBALS(current_file_index), lineno, utime, stime, rtime);
+ 		}
+ 	}
+ 	
+@@ -475,27 +489,14 @@
+    Module Startup and Shutdown Function Definitions
+    --------------------------------------------------------------------------- */
+ 
+-static void php_apd_init_globals(zend_apd_globals *apd_globals) 
+-{
+-	memset(apd_globals, 0, sizeof(zend_apd_globals));   
+-	
+-	apd_globals->function_summary = (HashTable *) malloc(sizeof(HashTable));
+-	apd_globals->file_summary = (HashTable *) malloc(sizeof(HashTable));
+-
+-	zend_hash_init(apd_globals->function_summary, 0, NULL, NULL, 1);
+-	zend_hash_init(apd_globals->file_summary, 0, NULL, NULL, 1);
+-
+-}
+-
+-static void php_apd_free_globals(zend_apd_globals *apd_globals)
++static void php_apd_init_globals(zend_apd_globals *apd_globals)
+ {
+-	free(apd_globals->function_summary);
+-	free(apd_globals->file_summary);
++    memset(apd_globals, 0, sizeof(apd_globals));
+ }
+ 
+ PHP_MINIT_FUNCTION(apd)
+ {
+-	ZEND_INIT_MODULE_GLOBALS(apd, php_apd_init_globals, php_apd_free_globals);
++	ZEND_INIT_MODULE_GLOBALS(apd, php_apd_init_globals, NULL)
+ 	REGISTER_INI_ENTRIES();
+ 	old_execute = zend_execute;
+ 	zend_execute = apd_execute;
+@@ -511,10 +512,11 @@
+ 	void **p;
+ 	int argCount;
+ 	zval **object_ptr_ptr;
++	
+   	fname = apd_get_active_function_name(op_array TSRMLS_CC);
+    	trace_function_entry(EG(function_table), fname, ZEND_USER_FUNCTION,
+ 						zend_get_executed_filename(TSRMLS_C),
+-						zend_get_executed_lineno(TSRMLS_C));
++						EG(in_execution)?zend_get_executed_lineno(TSRMLS_C):0);
+    	old_execute(op_array TSRMLS_CC);
+    	trace_function_exit(fname);
+    	efree(fname);
+@@ -534,7 +536,7 @@
+    	fname = apd_get_active_function_name(execd->op_array TSRMLS_CC);
+    	trace_function_entry(EG(function_table), fname, ZEND_INTERNAL_FUNCTION,
+ 						zend_get_executed_filename(TSRMLS_C),
+-						zend_get_executed_lineno(TSRMLS_C));
++						EG(in_execution)?zend_get_executed_lineno(TSRMLS_C):0);
+ 	execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
+ 	trace_function_exit(fname);
+ 	efree(fname);
+@@ -545,6 +547,8 @@
+ 
+ PHP_RINIT_FUNCTION(apd)
+ {
++	zend_hash_init(&APD_GLOBALS(function_summary), 0, NULL, NULL, 1);
++	zend_hash_init(&APD_GLOBALS(file_summary), 0, NULL, NULL, 1);
+ 	APD_GLOBALS(output).header = apd_pprof_output_header;
+ 	APD_GLOBALS(output).footer = apd_pprof_output_footer;
+ 	APD_GLOBALS(output).file_reference = apd_pprof_output_file_reference;
+@@ -553,10 +557,13 @@
+ 	APD_GLOBALS(output).enter_function = apd_pprof_output_enter_function;
+ 	APD_GLOBALS(output).exit_function = apd_pprof_output_exit_function;
+ 
++	APD_GLOBALS(pproftrace) = 0;
++	APD_GLOBALS(pprof_file) = NULL;
+ 	APD_GLOBALS(dump_file) = stderr;
+ 	APD_GLOBALS(dump_sock_id) = 0;
+ 	APD_GLOBALS(interactive_mode) = 0;
+ 	APD_GLOBALS(ignore_interactive) = 0;  
++	APD_GLOBALS(entry_memory_usage) = 0;
+ 	gettimeofday(&APD_GLOBALS(last_clock), NULL);
+ 	getrusage(RUSAGE_SELF, &APD_GLOBALS(last_ru));
+ 	APD_GLOBALS(first_ru) = APD_GLOBALS(last_ru);
+@@ -585,8 +592,8 @@
+ 		APD_GLOBALS(dump_sock_id)=0;
+ 	}
+ 
+-	zend_hash_clean(APD_GLOBALS(function_summary));
+-	zend_hash_clean(APD_GLOBALS(file_summary));
++	zend_hash_clean(&APD_GLOBALS(function_summary));
++	zend_hash_clean(&APD_GLOBALS(file_summary));
+ 	APD_GLOBALS(counter)++;
+ 	return SUCCESS;
+ }
+@@ -722,15 +729,15 @@
+ 	APD_GLOBALS(output).header();
+ 
+ 	filename = zend_get_executed_filename(TSRMLS_C);
+-	linenum = zend_get_executed_lineno(TSRMLS_C);
++	linenum = EG(in_execution)?zend_get_executed_lineno(TSRMLS_C):0;
+ 
+ 	fnum = (int *) emalloc(sizeof(int));
+ 	*fnum = APD_GLOBALS(function_index)++;
+-	zend_hash_add(APD_GLOBALS(function_summary), fname, strlen(fname)+1, fnum, sizeof(int), NULL);
++	zend_hash_add(&APD_GLOBALS(function_summary), fname, strlen(fname)+1, fnum, sizeof(int), NULL);
+ 
+ 	filenum = (int *) emalloc(sizeof(int));
+ 	*filenum = APD_GLOBALS(file_index)++;
+-	zend_hash_add(APD_GLOBALS(file_summary), (char *) filename, strlen(filename)+1, filenum, sizeof(int), NULL);
++	zend_hash_add(&APD_GLOBALS(file_summary), (char *) filename, strlen(filename)+1, filenum, sizeof(int), NULL);
+ 
+ 	APD_GLOBALS(output).file_reference(*filenum, filename);
+ 	APD_GLOBALS(output).declare_function(*fnum, fname, ZEND_USER_FUNCTION);
+@@ -738,7 +745,7 @@
+ 
+ 	fnum = (int *) emalloc(sizeof(int));
+ 	*fnum = APD_GLOBALS(function_index)++;
+-	zend_hash_add(APD_GLOBALS(function_summary), ent_fname, strlen(ent_fname)+1, fnum, sizeof(int), NULL);
++	zend_hash_add(&APD_GLOBALS(function_summary), ent_fname, strlen(ent_fname)+1, fnum, sizeof(int), NULL);
+ 
+ 	APD_GLOBALS(output).declare_function(*fnum, ent_fname, ZEND_USER_FUNCTION);
+ 	APD_GLOBALS(output).enter_function(*fnum, *filenum,  linenum);
+@@ -768,43 +775,21 @@
+ 	int issock =0;
+ 	int socketd = 0;
+ 	int path_len;
+-	char *dumpdir;
++	char *dumpdir = NULL, *fragment = "pprof";
++	int dumpdirlen, fragmentlen;
+ 	char path[MAXPATHLEN];
+-	zval  **z_dumpdir;
+-
+-	if(ZEND_NUM_ARGS() > 1 )
+-		{
+-			ZEND_WRONG_PARAM_COUNT();
+-		}
+-	if(ZEND_NUM_ARGS() == 0)
+-		{
+-			if(APD_GLOBALS(dumpdir)) {
+-				dumpdir = APD_GLOBALS(dumpdir);
+-			}
+-			else {
+-				zend_error(E_WARNING, "%s() no dumpdir specified",
+-						   get_active_function_name(TSRMLS_C));
+-				RETURN_FALSE;
+-			}
+-			APD_GLOBALS(pproftrace) = 1;
+-		}
+-	else {
+-		if(zend_get_parameters_ex(1, &z_dumpdir) == FAILURE)
+-			{
+-				ZEND_WRONG_PARAM_COUNT();
+-			}
+-		APD_GLOBALS(pproftrace) = 1;
+ 
+-		convert_to_string_ex(z_dumpdir);
+-		dumpdir = Z_STRVAL_PP(z_dumpdir);
++	dumpdir = APD_GLOBALS(dumpdir);
++	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|ss", &dumpdir, &dumpdirlen, &fragment, &fragmentlen) == FAILURE) {
++		return;
+ 	}
+-	
+-	snprintf(path, MAXPATHLEN, "%s/pprof.%05d.%d", dumpdir, getpid(), APD_GLOBALS(counter));
++	APD_GLOBALS(pproftrace) = 1;
++	snprintf(path, MAXPATHLEN, "%s/%s.%05d.%d", dumpdir, fragment, getpid(), APD_GLOBALS(counter));
+ 	if((APD_GLOBALS(pprof_file) = fopen(path, "a")) == NULL) {
+ 		zend_error(E_ERROR, "%s() failed to open %s for tracing", get_active_function_name(TSRMLS_C), path);
+ 	}  
+-
+ 	apd_pprof_header("apd_set_pprof_trace" TSRMLS_CC);
++	RETURN_STRING(path, 1);
+ }  
+ 
+ 
+Index: apd/php_apd.h
+===================================================================
+RCS file: /repository/pecl/apd/php_apd.h,v
+retrieving revision 1.21
+retrieving revision 1.24
+diff -u -r1.21 -r1.24
+--- apd/php_apd.h	10 Mar 2004 16:40:55 -0000	1.21
++++ apd/php_apd.h	2 Nov 2006 21:29:24 -0000	1.24
+@@ -89,7 +89,7 @@
+ extern zend_module_entry apd_module_entry;
+ #define apd_module_ptr &apd_module_entry
+ 
+-#define APD_VERSION "0.9"
++#define APD_VERSION "1.0.2-dev"
+ 
+ #define FUNCTION_TRACE 1
+ #define ARGS_TRACE 2
+@@ -173,8 +173,8 @@
+ ZEND_BEGIN_MODULE_GLOBALS(apd)
+ 	int counter;
+ 	void* stack;
+-	HashTable* function_summary;
+-	HashTable* file_summary;
++	HashTable function_summary;
++	HashTable file_summary;
+ 	char* dumpdir; /* directory for dumping seesion traces to */
+ 	FILE* dump_file; /* FILE for dumping session traces to */
+ 	FILE* pprof_file; /* File for profiling output */
+@@ -183,6 +183,7 @@
+ 	struct timeval last_clock;
+ 	struct rusage first_ru;
+ 	struct rusage last_ru;
++	long entry_memory_usage;
+ 	int function_index;                /* current index of functions for pprof tracing */
+ 	int file_index;                /* current index of functions for pprof tracing */
+ 	int current_file_index;
+Index: apd/pprofp
+===================================================================
+RCS file: /repository/pecl/apd/pprofp,v
+retrieving revision 1.16
+retrieving revision 1.20
+diff -u -r1.16 -r1.20
+--- apd/pprofp	21 Sep 2004 14:05:16 -0000	1.16
++++ apd/pprofp	2 Nov 2006 21:29:24 -0000	1.20
+@@ -5,32 +5,21 @@
+ $con = new Console_Getopt;
+ $args = $con->readPHPArgv();
+ array_shift($args);
+-$shortoptions = 'acg:hiIlmMrRsStTuUO:vzZ';
++$shortoptions = 'aC:cg:hiIlmMrRsStTuUO:vXzZ';
+ $retval = $con->getopt( $args, $shortoptions);
+ if(is_object($retval)) {
+     usage();
+ }
+ $opt['O'] = 20;
++$opt['C'] = 20;
+ foreach ($retval[0] as $kv_array) {
+     $opt[$kv_array[0]] = $kv_array[1];
+ }
+-($dataFile = $retval[1][0]) || usage();
+-if(($DATA = fopen($dataFile, "r")) == FALSE) {
+-    print "Failed to open $dataFile for reading\n";
+-    exit(1);
+-}
+ 
+ $cfg = array();
+-parse_info('HEADER', $DATA, $cfg);
+ 
+-$callstack = array();
+ $calls = array();
+-$indent_cur = 0;
+-$file_hash = array();
+ $mem = array();
+-$t_rtime = 0;
+-$t_stime = 0;
+-$t_utime = 0;
+ $c_rtimes = array();
+ $c_stimes = array();
+ $c_utimes = array();
+@@ -40,107 +29,152 @@
+ $rtotal = 0;
+ $stotal = 0;
+ $utotal = 0;
+-$last_memory = 0;
+-
+-$symbol_hash = array();
++$count = $opt['C'];
+ $symbol_type = array();
++$num = 0;
+ 
+-while($line = fgets($DATA)) {
+-    $line = rtrim($line);
+-    if(preg_match("/^END_TRACE/", $line)){
+-        break;
+-    }
+-    list($token, $data) = preg_split("/ /",$line, 2);
+-    if($token == '!') {
+-	list ($index, $file) = preg_split("/ /", $data, 2);
+-	$file_hash[$index] = $file;
+-	continue;
+-    }
+-    if( $token == '&') {
+-        list ($index, $name, $type) = preg_split("/ /", $data, 3);
+-        $symbol_hash[$index] = $name;
+-	$symbol_type[$index] = $type;
+-        continue;
++if(!$retval[1]) {
++  usage();
++}
++
++$files = array();
++foreach($retval[1] as $f) {
++  $files = array_merge($files, find_files($f));
++}
++shuffle($files);
++foreach($files as $path) {
++  if($count-- == 0) break;
++  if(array_key_exists('v', $opt)) { echo "Processing $path\n"; }
++  $num++;
++  parse_profile($path);
++}
++
++function parse_profile($dataFile) {
++    global $cfg;
++    global $opt;
++    global $calls;
++    global $mem;
++    global $c_rtimes;
++    global $c_stimes;
++    global $c_utimes;
++    global $rtimes;
++    global $stimes;
++    global $utimes;
++    global $rtotal;
++    global $stotal;
++    global $utotal;
++    global $symbol_type;
++
++    $symbol_hash = array();
++
++    $callstack = array();
++    $file_hash = array();
++    $indent_cur = 0;
++
++    if(($DATA = fopen($dataFile, "r")) == FALSE) {
++        return 0;
+     }
+-    if( $token == '+') {
+-        list($index, $file, $line) = preg_split("/ /",$data, 3);
+-        if(array_key_exists('i',$opt) && $symbol_type[$index] == 1) {
++    parse_info('HEADER', $DATA, $cfg);
++    while($line = fgets($DATA)) {
++        $line = rtrim($line);
++        if(preg_match("/^END_TRACE/", $line)){
++            break;
++        }
++        list($token, $data) = preg_split("/ /",$line, 2);
++        if($token == '!') {
++      list ($index, $file) = preg_split("/ /", $data, 2);
++      $file_hash[$index] = $file;
++      continue;
++        }
++        if( $token == '&') {
++            list ($index, $name, $type) = preg_split("/ /", $data, 3);
++            $symbol_hash[$index] = $name;
++      $symbol_type[$symbol_hash[$index]] = $type;
+             continue;
+-        }	
+-        $index_cur = $index;
+-        $calls[$index_cur]++;
+-        array_push($callstack, $index_cur);
+-        if(array_key_exists('T', $opt)) {
+-            if(array_key_exists('c', $opt)) {
+-                printf("%2.02f ", $rtotal/1000000);
+-            }
+-            print str_repeat("  ", $indent_cur).$symbol_hash[$index_cur]."\n";
+-	    if(array_key_exists('m', $opt)) {
+-		print str_repeat("  ", $indent_cur)."C: $file_hash[$file]:$line M: $memory\n";
+-	    }
+-	}
+-        elseif(array_key_exists('t', $opt)) {
+-            if ( $indent_last == $indent_cur && $index_last == $index_cur ) {
+-                $repcnt++;
+-            }
+-            else {
+-                if ( $repcnt ) {
+-                    $repstr = ' ('.++$repcnt.'x)';
+-                }
++        }
++        if( $token == '+') {
++            list($index, $file, $line) = preg_split("/ /",$data, 3);
++            if(array_key_exists('i',$opt) && $symbol_type[$symbol_hash[$index]] == 1) {
++                continue;
++            } 
++            $index_cur = $index;
++            $calls[$symbol_hash[$index_cur]]++;
++            array_push($callstack, $index_cur);
++            if(array_key_exists('T', $opt)) {
+                 if(array_key_exists('c', $opt)) {
+                     printf("%2.02f ", $rtotal/1000000);
+                 }
+-                print str_repeat("  ", $indent_last).$symbol_hash[$index_last].$repstr."\n";
+-		if(array_key_exists('m', $opt)) {
+-		   print str_repeat("  ", $indent_cur)."C: $file_hash[$file_last]:$line_last M: $memory\n";
+-		}
+-                $repstr = '';
+-                $repcnt = 0;
+-                $index_last = $index_cur;
+-                $indent_last = $indent_cur;
+-		$file_last = $file;
+-		$line_last = $line;
++                print str_repeat("  ", $indent_cur).$symbol_hash[$index_cur];
++          if(array_key_exists('m', $opt)) {
++        print " C: $file_hash[$file]:$line\n";
++          } else {
++                print "\n";
+             }
++      }
++            elseif(array_key_exists('t', $opt)) {
++                if ( $indent_last == $indent_cur && $index_last == $index_cur ) {
++                    $repcnt++;
++                }
++                else {
++                    if ( $repcnt ) {
++                        $repstr = ' ('.++$repcnt.'x)';
++                    }
++                    if(array_key_exists('c', $opt)) {
++                        printf("%2.02f ", $rtotal/1000000);
++                    }
++                    print str_repeat("  ", $indent_last).$symbol_hash[$index_last].$repstr."\n";
++        if(array_key_exists('m', $opt)) {
++           print str_repeat("  ", $indent_cur)."C: $file_hash[$file_last]:$line_last M: $memory\n";
+         }
+-	$indent_cur++;
+-        continue;
+-    }
+-    if( $token == '@') {
+-        list($file_no, $line_no, $ut, $st, $rt) = preg_split("/ /", $data);
+-        $top = array_pop($callstack);
+-        $utimes[$top] += $ut;
+-        $utotal += $ut;
+-        $stimes[$top] += $st;
+-        $stotal += $st;
+-        $rtimes[$top] += $rt;
+-        $rtotal += $rt;
+-        array_push($callstack, $top);
+-	foreach ($callstack as $stack_element) {
+-            $c_utimes[$stack_element] += $ut;
+-            $c_stimes[$stack_element] += $st;
+-            $c_rtimes[$stack_element] += $rt;
++                    $repstr = '';
++                    $repcnt = 0;
++                    $index_last = $index_cur;
++                    $indent_last = $indent_cur;
++        $file_last = $file;
++        $line_last = $line;
++                }
++            }
++            $indent_cur++;
++            continue;
+         }
+-        continue;
+-    }
+-    if ($token == '-') {
+-        list  ($index, $memory) = preg_split("/ /", $data, 2);
+-        if(array_key_exists('i',$opt) && $symbol_type[$index] == 1)
+-        {
++        if( $token == '@') {
++            list($file_no, $line_no, $ut, $st, $rt) = preg_split("/ /", $data);
++            $top = array_pop($callstack);
++            $utimes[$symbol_hash[$top]] += $ut;
++            $utotal += $ut;
++            $stimes[$symbol_hash[$top]] += $st;
++            $stotal += $st;
++            $rtimes[$symbol_hash[$top]] += $rt;
++            $rtotal += $rt;
++            array_push($callstack, $top);
++            foreach ($callstack as $stack_element) {
++                $c_utimes[$symbol_hash[$stack_element]] += $ut;
++                $c_stimes[$symbol_hash[$stack_element]] += $st;
++                $c_rtimes[$symbol_hash[$stack_element]] += $rt;
++            }
++            continue;
++        }
++        if ($token == '-') {
++            list  ($index, $memory) = preg_split("/ /", $data, 2);
++            if(array_key_exists('i',$opt) && $symbol_type[$index] == 1)
++            {
++                continue;
++            }
++            $mem[$symbol_hash[$index]] += $memory;
++            $indent_cur--;
++            $tmp = array_pop($callstack);
+             continue;
+         }
+-        $mem[$index] += ($memory - $last_memory);
+-        $last_memory = $memory;
+-        $indent_cur--;
+-        $tmp = array_pop($callstack);
+-        continue;
+     }
++    parse_info('FOOTER', $DATA, $cfg);
++    return 1;
+ }
+-parse_info('FOOTER', $DATA, $cfg);
++
++
+ $sort = 'by_time';
+ if(array_key_exists('l', $opt)) { $sort = 'by_calls'; }
+ if(array_key_exists('m', $opt)) { $sort = 'by_mem'; }
+ if(array_key_exists('a', $opt)) { $sort = 'by_name'; }
+-if(array_key_exists('v', $opt)) { $sort = 'by_avgcpu'; }
+ if(array_key_exists('r', $opt)) { $sort = 'by_rtime'; }
+ if(array_key_exists('R', $opt)) { $sort = 'by_c_rtime'; }
+ if(array_key_exists('s', $opt)) { $sort = 'by_stime'; }
+@@ -148,127 +182,246 @@
+ if(array_key_exists('u', $opt)) { $sort = 'by_utime'; }
+ if(array_key_exists('U', $opt)) { $sort = 'by_c_utime'; }
+ if(array_key_exists('Z', $opt)) { $sort = 'by_c_time'; }
+-if( !count($symbol_hash)) {
++if( !count($calls)) {
+     continue;
+ }
+ 
+-printf("
+-Trace for %s
+-Total Elapsed Time = %4.2f
+-Total System Time  = %4.2f
+-Total User Time    = %4.2f
+-", $cfg['caller'], $rtotal/1000000, $stotal/1000000, $utotal/1000000);
+-print "\n
+-         Real         User        System             secs/    cumm
+-%Time (excl/cumm)  (excl/cumm)  (excl/cumm) Calls    call    s/call  Memory Usage Name
+---------------------------------------------------------------------------------------\n";
+-$l = 0;
+-$itotal = 0;
+-$percall = 0;
+-$cpercall = 0;
++if(array_key_exists('X', $opt)) {
++  print "name,pcnt,real time, excl user+sys, cumm user+sys, sec/call, calls\n";
++  $l = 0;
++  $itotal = 0;
++  $percall = 0;
++  $cpercall = 0;
+ 
+-uksort($symbol_hash, $sort);
+-foreach (array_keys($symbol_hash) as $j) {
++  uksort($calls, $sort);
++  foreach (array_keys($calls) as $j) {
+     if(array_key_exists('i', $opt) && $symbol_type[$j] == 1) {
+-        continue;
++      continue;
+     }
+     if ($l++ <  $opt['O']) {
+-        $pcnt = 100*($stimes[$j] + $utimes[$j])/($utotal + $stotal + $itotal);
+-        $c_pcnt = 100* ($c_stimes[$j] + $c_utimes[$j])/($utotal + $stotal + $itotal);
+-        $rsecs = $rtimes[$j]/1000000;
+-        $ssecs = $stimes[$j]/1000000;
+-        $usecs = $utimes[$j]/1000000;
+-        $c_rsecs = $c_rtimes[$j]/1000000;
+-        $c_ssecs = $c_stimes[$j]/1000000;
+-        $c_usecs = $c_utimes[$j]/1000000;
+-        $ncalls = $calls[$j];
+-	if(array_key_exists('z', $opt)) {
+-        	$percall = ($usecs + $ssecs)/$ncalls;
+-	        $cpercall = ($c_usecs + $c_ssecs)/$ncalls;
+-                if($utotal + $stotal) {
+-		    $pcnt = 100*($stimes[$j] + $utimes[$j])/($utotal + $stotal);
+-                }
+-                else {
+-                    $pcnt = 100;
+-                }
+-	}
+-	if(array_key_exists('Z', $opt)) {
+-        	$percall = ($usecs + $ssecs)/$ncalls;
+-	        $cpercall = ($c_usecs + $c_ssecs)/$ncalls;
+-                if($utotal + $stotal) {
+-		    $pcnt = 100*($c_stimes[$j] + $c_utimes[$j])/($utotal + $stotal);
+-                }
+-                else {
+-                    $pcnt = 100;
+-                }
+-	}
+-	if(array_key_exists('r', $opt)) {
+-        	$percall = ($rsecs)/$ncalls;
+-	        $cpercall = ($c_rsecs)/$ncalls;
+-                if($rtotal) {
+-		    $pcnt = 100*$rtimes[$j]/$rtotal;
+-                }
+-                else {
+-                    $pcnt = 100;
+-                }
+-	}
+-	if(array_key_exists('R', $opt)) {
+-        	$percall = ($rsecs)/$ncalls;
+-	        $cpercall = ($c_rsecs)/$ncalls;
+-                if($rtotal) {
+-		    $pcnt = 100*$c_rtimes[$j]/$rtotal;
+-                }
+-                else {
+-                    $pcnt = 100;
+-                }
+-	}
+-	if(array_key_exists('u', $opt)) {
+-        	$percall = ($usecs)/$ncalls;
+-	        $cpercall = ($c_usecs)/$ncalls;
+-                if($utotal) {
+-		    $pcnt = 100*$utimes[$j]/$utotal;
+-                } 
+-                else {
+-                    $pcnt = 100;
+-                }
+-	}
+-	if(array_key_exists('U', $opt)) {
+-        	$percall = ($usecs)/$ncalls;
+-	        $cpercall = ($c_usecs)/$ncalls;
+-                if($utotal) {
+-		    $pcnt = 100*$c_utimes[$j]/$utotal;
+-                }
+-                else {
+-                    $pcnt = 100;
+-                }
+-	}
+-	if(array_key_exists('s', $opt)) {
+-        	$percall = ($ssecs)/$ncalls;
+-	        $cpercall = ($c_ssecs)/$ncalls;
+-                if($stotal) {
+-		    $pcnt = 100*$stimes[$j]/$stotal;
+-                }
+-                else {
+-                    $pcnt = 100;
+-                }
+-	}
+-	if(array_key_exists('S', $opt)) {
+-        	$percall = ($ssecs)/$ncalls;
+-	        $cpercall = ($c_ssecs)/$ncalls;
+-                if($stotal) {
+-		    $pcnt = 100*$c_stimes[$j]/$stotal;
+-                }
+-                else {
+-                    $pcnt = 100;
+-                }
+-	}
+-//        $cpercall = ($c_usecs + $c_ssecs)/$ncalls;
+-        $mem_usage = $mem[$j];
+-        $name = $symbol_hash[$j];
+-        printf("%3.01f %2.02f %2.02f  %2.02f %2.02f  %2.02f %2.02f  %4d  %2.04f   %2.04f %12d %s\n", $pcnt, $rsecs, $c_rsecs, $usecs, $c_usecs, $ssecs, $c_ssecs, $ncalls, $percall, $cpercall, $mem_usage, $name);
++      $pcnt = 100*($stimes[$j] + $utimes[$j])/($utotal + $stotal + $itotal);
++      $c_pcnt = 100* ($c_stimes[$j] + $c_utimes[$j])/($utotal + $stotal + $itotal);
++      $rsecs = $rtimes[$j]/(1000000 * $num);
++      $ssecs = $stimes[$j]/(1000000 * $num);
++      $usecs = $utimes[$j]/(1000000 * $num);
++      $c_rsecs = $c_rtimes[$j]/(1000000 * $num);
++      $c_ssecs = $c_stimes[$j]/(1000000 * $num);
++      $c_usecs = $c_utimes[$j]/(1000000 * $num);
++      $ncalls = $calls[$j]/$num;
++      if(array_key_exists('z', $opt)) {
++        $percall = ($usecs + $ssecs)/$ncalls;
++        $cpercall = ($c_usecs + $c_ssecs)/$ncalls;
++        if($utotal + $stotal) {
++          $pcnt = 100*($stimes[$j] + $utimes[$j])/($utotal + $stotal);
++        }
++        else {
++          $pcnt = 100;
++        }
++      }
++      if(array_key_exists('Z', $opt)) {
++        $percall = ($usecs + $ssecs)/$ncalls;
++        $cpercall = ($c_usecs + $c_ssecs)/$ncalls;
++        if($utotal + $stotal) {
++          $pcnt = 100*($c_stimes[$j] + $c_utimes[$j])/($utotal + $stotal);
++        }
++        else {
++          $pcnt = 100;
++        }
++      }
++      if(array_key_exists('r', $opt)) {
++        $percall = ($rsecs)/$ncalls;
++        $cpercall = ($c_rsecs)/$ncalls;
++        if($rtotal) {
++          $pcnt = 100*$rtimes[$j]/$rtotal;
++        }
++        else {
++          $pcnt = 100;
++        }
++      }
++      if(array_key_exists('R', $opt)) {
++        $percall = ($rsecs)/$ncalls;
++        $cpercall = ($c_rsecs)/$ncalls;
++        if($rtotal) {
++          $pcnt = 100*$c_rtimes[$j]/$rtotal;
++        }
++        else {
++          $pcnt = 100;
++        }
++      }
++      if(array_key_exists('u', $opt)) {
++        $percall = ($usecs)/$ncalls;
++        $cpercall = ($c_usecs)/$ncalls;
++        if($utotal) {
++          $pcnt = 100*$utimes[$j]/$utotal;
++        } 
++        else {
++          $pcnt = 100;
++        }
++      }
++      if(array_key_exists('U', $opt)) {
++        $percall = ($usecs)/$ncalls;
++        $cpercall = ($c_usecs)/$ncalls;
++        if($utotal) {
++          $pcnt = 100*$c_utimes[$j]/$utotal;
++        }
++        else {
++          $pcnt = 100;
++        }
++      }
++      if(array_key_exists('s', $opt)) {
++        $percall = ($ssecs)/$ncalls;
++        $cpercall = ($c_ssecs)/$ncalls;
++        if($stotal) {
++          $pcnt = 100*$stimes[$j]/$stotal;
++        }
++        else {
++          $pcnt = 100;
++        }
++      }
++      if(array_key_exists('S', $opt)) {
++        $percall = ($ssecs)/$ncalls;
++        $cpercall = ($c_ssecs)/$ncalls;
++        if($stotal) {
++          $pcnt = 100*$c_stimes[$j]/$stotal;
++        }
++        else {
++          $pcnt = 100;
++        }
++      }
++      //        $cpercall = ($c_usecs + $c_ssecs)/$ncalls;
++      $mem_usage = $mem[$j];
++      $name = $j;
++      $zsecs = $usecs + $ssecs;
++      $c_zsecs = $c_usecs + $c_ssecs;
++      print "$name,$pcnt,$rsecs,$c_rsecs,$zsecs,$c_zsecs,$percall,$ncalls\n";
+     }
+-}
++  }
++} else {
++  print "Trace for:\n";
++  foreach($cfg['caller'] as $file => $count) {
++    if($count > 1) {
++      print "\t$file (x$count)\n";
++    } else {
++      print "\t$file\n";
++    }
++  }
++  printf("
++==
++      Total Elapsed Time = %4.2f
++      Total System Time  = %4.2f
++      Total User Time    = %4.2f
++      ", $rtotal/(1000000 * $num), $stotal/(1000000 * $num), $utotal/(1000000 * $num));
++  print "\n
++    Real         User        System             secs/    cumm
++    %Time (excl/cumm)  (excl/cumm)  (excl/cumm) Calls    call    s/call  Memory Usage Name
++    --------------------------------------------------------------------------------------\n";
++  $l = 0;
++  $itotal = 0;
++  $percall = 0;
++  $cpercall = 0;
+ 
++  uksort($calls, $sort);
++  foreach (array_keys($calls) as $j) {
++    if(array_key_exists('i', $opt) && $symbol_type[$j] == 1) {
++      continue;
++    }
++    if ($l++ <  $opt['O']) {
++      $pcnt = 100*($stimes[$j] + $utimes[$j])/($utotal + $stotal + $itotal);
++      $c_pcnt = 100* ($c_stimes[$j] + $c_utimes[$j])/($utotal + $stotal + $itotal);
++      $rsecs = $rtimes[$j]/(1000000 * $num);
++      $ssecs = $stimes[$j]/(1000000 * $num);
++      $usecs = $utimes[$j]/(1000000 * $num);
++      $c_rsecs = $c_rtimes[$j]/(1000000 * $num);
++      $c_ssecs = $c_stimes[$j]/(1000000 * $num);
++      $c_usecs = $c_utimes[$j]/(1000000 * $num);
++      $ncalls = $calls[$j]/$num;
++      if(array_key_exists('z', $opt)) {
++        $percall = ($usecs + $ssecs)/$ncalls;
++        $cpercall = ($c_usecs + $c_ssecs)/$ncalls;
++        if($utotal + $stotal) {
++          $pcnt = 100*($stimes[$j] + $utimes[$j])/($utotal + $stotal);
++        }
++        else {
++          $pcnt = 100;
++        }
++      }
++      if(array_key_exists('Z', $opt)) {
++        $percall = ($usecs + $ssecs)/$ncalls;
++        $cpercall = ($c_usecs + $c_ssecs)/$ncalls;
++        if($utotal + $stotal) {
++          $pcnt = 100*($c_stimes[$j] + $c_utimes[$j])/($utotal + $stotal);
++        }
++        else {
++          $pcnt = 100;
++        }
++      }
++      if(array_key_exists('r', $opt)) {
++        $percall = ($rsecs)/$ncalls;
++        $cpercall = ($c_rsecs)/$ncalls;
++        if($rtotal) {
++          $pcnt = 100*$rtimes[$j]/$rtotal;
++        }
++        else {
++          $pcnt = 100;
++        }
++      }
++      if(array_key_exists('R', $opt)) {
++        $percall = ($rsecs)/$ncalls;
++        $cpercall = ($c_rsecs)/$ncalls;
++        if($rtotal) {
++          $pcnt = 100*$c_rtimes[$j]/$rtotal;
++        }
++        else {
++          $pcnt = 100;
++        }
++      }
++      if(array_key_exists('u', $opt)) {
++        $percall = ($usecs)/$ncalls;
++        $cpercall = ($c_usecs)/$ncalls;
++        if($utotal) {
++          $pcnt = 100*$utimes[$j]/$utotal;
++        } 
++        else {
++          $pcnt = 100;
++        }
++      }
++      if(array_key_exists('U', $opt)) {
++        $percall = ($usecs)/$ncalls;
++        $cpercall = ($c_usecs)/$ncalls;
++        if($utotal) {
++          $pcnt = 100*$c_utimes[$j]/$utotal;
++        }
++        else {
++          $pcnt = 100;
++        }
++      }
++      if(array_key_exists('s', $opt)) {
++        $percall = ($ssecs)/$ncalls;
++        $cpercall = ($c_ssecs)/$ncalls;
++        if($stotal) {
++          $pcnt = 100*$stimes[$j]/$stotal;
++        }
++        else {
++          $pcnt = 100;
++        }
++      }
++      if(array_key_exists('S', $opt)) {
++        $percall = ($ssecs)/$ncalls;
++        $cpercall = ($c_ssecs)/$ncalls;
++        if($stotal) {
++          $pcnt = 100*$c_stimes[$j]/$stotal;
++        }
++        else {
++          $pcnt = 100;
++        }
++      }
++      //        $cpercall = ($c_usecs + $c_ssecs)/$ncalls;
++      $mem_usage = $mem[$j];
++      $name = $j;
++      printf("%3.01f %2.02f %2.02f  %2.02f %2.02f  %2.02f %2.02f  %4d  %2.04f   %2.04f %12d %s\n", $pcnt, $rsecs, $c_rsecs, $usecs, $c_usecs, $ssecs, $c_ssecs, $ncalls, $percall, $cpercall, $mem_usage, $name);
++    }
++  }
++}
+ 
+ function usage() {
+ print <<<EOD
+@@ -283,7 +436,6 @@
+     -S          Sort by system time spent in subroutines (inclusive of child calls).
+     -u          Sort by user time spent in subroutines.
+     -U          Sort by user time spent in subroutines (inclusive of child calls).
+-    -v          Sort by average amount of time spent in subroutines.
+     -z          Sort by user+system time spent in subroutines. (default)
+ 
+     Display options
+@@ -292,6 +444,7 @@
+     -O <cnt>    Specifies maximum number of subroutines to display. (default 15)
+     -t          Display compressed call tree.
+     -T          Display uncompressed call tree.
++    -v          Be verbose.
+ 
+ EOD;
+     exit(1);
+@@ -304,7 +457,11 @@
+             break;
+         }
+         if(preg_match("/(\w+)=(.*)/", $line, $matches)) {
+-            $cfg[$matches[1]] = $matches[2];
++            if($matches[1] == 'caller') {
++              $cfg['caller'][$matches[2]] = 1;
++            } else {
++              $cfg[$matches[1]] = $matches[2];
++            }
+         }
+     }
+ }
+@@ -345,5 +502,33 @@
+ function by_utime($a,$b) { global $utimes; return num_cmp($utimes[$b], $utimes[$a]); }
+ function by_c_utime($a,$b) { global $c_utimes; return num_cmp($c_utimes[$b], $c_utimes[$a]); }
+ function by_mem($a, $b) { global $mem; return num_cmp($mem[$b], $mem[$a]); }
+-    
++
++function find_files($dataFile) {
++  if(is_file($dataFile)) {
++    return array($dataFile);
++  }
++  else if(is_dir($dataFile)) {
++    $output = array();
++    if ($dh = opendir($dataFile)) {
++      while (($file = readdir($dh)) !== false) {
++        if($file != '.' && $file != '..') {
++          $path = "$dataFile/$file";
++          $output = array_merge($output, find_files($path));
++        }
++      }
++      closedir($dh);
++      return $output;
++    }
++  }  else {
++    print "Warning - can't use $dataFile\n"; 
++    return array();
++  }
++}
++
++function stuff2($dataFile, $limit = 0) {
++  $files = find_files($dataFile, $limit);
++  var_dump($files);
++  exit;
++}
++
+ ?>
