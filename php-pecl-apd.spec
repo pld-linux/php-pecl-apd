@@ -1,7 +1,7 @@
 %define		_modname	apd
 %define		_status		stable
 Summary:	%{_modname} - full-featured engine-level profiler/debugger
-Summary(pl.UTF-8):   %{_modname} - w pełni funkcjonalny profiler/debugger dla PHP
+Summary(pl.UTF-8):	%{_modname} - w pełni funkcjonalny profiler/debugger dla PHP
 Name:		php-pecl-%{_modname}
 Version:	1.0.1
 Release:	7
