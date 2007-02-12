@@ -1,7 +1,7 @@
 %define		_modname	apd
 %define		_status		stable
 Summary:	%{_modname} - full-featured engine-level profiler/debugger
-Summary(pl):	%{_modname} - w pe³ni funkcjonalny profiler/debugger dla PHP
+Summary(pl.UTF-8):   %{_modname} - w peÅ‚ni funkcjonalny profiler/debugger dla PHP
 Name:		php-pecl-%{_modname}
 Version:	1.0.1
 Release:	7
@@ -25,9 +25,9 @@ Devel::DProf.
 
 In PECL status of this package is: %{_status}.
 
-%description -l pl
-APD to w pe³ni funkcjonalny profiler/debugger ³adowany jako
-rozszerzenie Zend. Ma byæ odpowiednikiem gprof z C lub perlowego
+%description -l pl.UTF-8
+APD to w peÅ‚ni funkcjonalny profiler/debugger Å‚adowany jako
+rozszerzenie Zend. Ma byÄ‡ odpowiednikiem gprof z C lub perlowego
 Devel::DProf.
 
 To rozszerzenie ma w PECL status: %{_status}.
