@@ -5,7 +5,7 @@ Summary(pl.UTF-8):	%{_modname} - w pełni funkcjonalny profiler/debugger dla PHP
 Name:		php-pecl-%{_modname}
 Version:	1.0.1
 Release:	7
-License:	PHP 2.02
+License:	PHP 3.01
 Group:		Development/Languages/PHP
 Source0:	http://pecl.php.net/get/%{_modname}-%{version}.tgz
 # Source0-md5:	470ea75cde09f7504c83441911c86f29
