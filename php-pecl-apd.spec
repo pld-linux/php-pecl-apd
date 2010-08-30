@@ -12,7 +12,7 @@ Source0:	http://pecl.php.net/get/%{_modname}-%{version}.tgz
 Patch0:		%{name}-cvs.patch
 URL:		http://pecl.php.net/package/apd/
 BuildRequires:	php-devel >= 3:5.0.0
-BuildRequires:	rpmbuild(macros) >= 1.344
+BuildRequires:	rpmbuild(macros) >= 1.578
 %{?requires_zend_extension}
 Requires:	php-common >= 4:5.0.4
 Obsoletes:	php-pear-%{_modname}
@@ -50,7 +50,7 @@ install -d $RPM_BUILD_ROOT{%{php_sysconfdir}/conf.d,%{php_extensiondir}}
 install %{_modname}-%{version}/modules/%{_modname}.so $RPM_BUILD_ROOT%{php_extensiondir}
 cat <<'EOF' > $RPM_BUILD_ROOT%{php_sysconfdir}/conf.d/%{_modname}.ini
 ; Enable %{_modname} extension module
-zend_extension%{?zend_zts:_ts}=%{_modname}.so
+zend_extension%{?zend_zts}=%{_modname}.so
 EOF
 
 %clean
