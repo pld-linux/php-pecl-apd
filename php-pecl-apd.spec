@@ -11,10 +11,9 @@ Source0:	http://pecl.php.net/get/%{_modname}-%{version}.tgz
 # Source0-md5:	470ea75cde09f7504c83441911c86f29
 Patch0:		%{name}-cvs.patch
 URL:		http://pecl.php.net/package/apd/
-BuildRequires:	php-devel >= 3:5.0.0
-BuildRequires:	rpmbuild(macros) >= 1.578
+BuildRequires:	php-devel >= 4:5.3.0
+BuildRequires:	rpmbuild(macros) >= 1.579
 %{?requires_zend_extension}
-Requires:	php-common >= 4:5.0.4
 Obsoletes:	php-pear-%{_modname}
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
@@ -50,7 +49,7 @@ install -d $RPM_BUILD_ROOT{%{php_sysconfdir}/conf.d,%{php_extensiondir}}
 install %{_modname}-%{version}/modules/%{_modname}.so $RPM_BUILD_ROOT%{php_extensiondir}
 cat <<'EOF' > $RPM_BUILD_ROOT%{php_sysconfdir}/conf.d/%{_modname}.ini
 ; Enable %{_modname} extension module
-zend_extension%{?zend_zts}=%{_modname}.so
+zend_extension=%{_modname}.so
 EOF
 
 %clean
