@@ -5,7 +5,7 @@ Summary:	%{modname} - full-featured engine-level profiler/debugger
 Summary(pl.UTF-8):	%{modname} - w pełni funkcjonalny profiler/debugger dla PHP
 Name:		%{php_name}-pecl-%{modname}
 Version:	1.0.1
-Release:	8
+Release:	9
 License:	PHP 3.01
 Group:		Development/Languages/PHP
 Source0:	http://pecl.php.net/get/%{modname}-%{version}.tgz
@@ -15,6 +15,7 @@ URL:		http://pecl.php.net/package/apd/
 BuildRequires:	%{php_name}-devel >= 4:5.2.17-8
 BuildRequires:	rpmbuild(macros) >= 1.650
 %{?requires_zend_extension}
+Provides:	php(%{modname}) = %{version}
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
 %description
